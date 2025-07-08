@@ -39,21 +39,24 @@ app.set('trust proxy', 1);
 app.use(express.json());
 
 // CORS global
+const allowedOrigins = [
+  'http://localhost:3000',
+  'https://gaspassdash-front.onrender.com'
+];
+
 app.use(cors({
   origin: function (origin, callback) {
-    const allowedOrigins = [
-      'http://localhost:3000',
-      'https://gaspassdash-front.onrender.com'
-    ];
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
+      console.error('CORS bloqué pour:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
 
 
 // rate limiter
