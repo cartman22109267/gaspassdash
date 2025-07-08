@@ -40,10 +40,21 @@ app.use(express.json());
 
 // CORS global
 app.use(cors({
-  origin: process.env.FRONTEND_URL, // ex: http://localhost:3000
+  origin: function (origin, callback) {
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'https://gaspassdash-front.onrender.com'
+    ];
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
-  allowedHeaders: ['Content-Type','Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
 
 // rate limiter
 app.use(rateLimit({ windowMs: 15*60*1000, max: 100 }));
