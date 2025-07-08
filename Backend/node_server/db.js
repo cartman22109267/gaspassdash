@@ -1,7 +1,4 @@
-require('dotenv-safe').config({
-  allowEmptyValues: false,
-  example: '.env.example'
-});
+require('dotenv').config();
 const { Pool } = require('pg');
 
 const pool = new Pool({
