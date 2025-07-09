@@ -1,5 +1,4 @@
-// src/pages/Users.jsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   fetchPendingUsers,
   fetchAllUsers,
@@ -28,36 +27,64 @@ export default function Users() {
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState({ open: false, user: null, showPass: false });
 
-  useEffect(() => {
-    loadData();
+  const loadData = useCallback(async () => {
+    try {
+      // 1) Récupère la réponse axios
+      let response;
+      if (tab === 'pending') {
+        response = await fetchPendingUsers();
+      } else {
+        response = await fetchAllUsers();
+      }
+
+      // 2) Extrait le data (axios le stocke en .data)
+      const payload = response && response.data ? response.data : response;
+
+      // 3) Trouve le vrai tableau selon la clé
+      let usersList = [];
+      if (Array.isArray(payload)) {
+        usersList = payload;
+      } else if (Array.isArray(payload.pending)) {
+        usersList = payload.pending;
+      } else if (Array.isArray(payload.users)) {
+        usersList = payload.users;
+      } else if (Array.isArray(payload.data)) {
+        usersList = payload.data;
+      } else {
+        console.warn('Format inattendu de la réponse API Users:', payload);
+      }
+
+      // 4) MàJ états
+      if (tab === 'pending') {
+        setPending(usersList);
+      } else {
+        setAllUsers(usersList);
+      }
+      // on clone pour toujours garantir un tableau
+      setDisplayed([...usersList]);
+    } catch (err) {
+      console.error('Erreur loadData:', err);
+      toast.error('Erreur de chargement des utilisateurs');
+    } finally {
+      setSearch('');
+    }
   }, [tab]);
 
   useEffect(() => {
-    const list = (tab === 'pending' ? pending : allUsers)
-      .filter(u =>
-        (u.name || u.username).toLowerCase().includes(search.toLowerCase()) ||
-        u.username.toLowerCase().includes(search.toLowerCase()) ||
-        u.phone.includes(search)
-      );
-    setDisplayed(list);
-  }, [search, pending, allUsers, tab]);
+    loadData();
+  }, [loadData]);
 
-  async function loadData() {
-    try {
-      if (tab === 'pending') {
-        const data = await fetchPendingUsers();
-        setPending(data);
-        setDisplayed(data);
-      } else {
-        const data = await fetchAllUsers();
-        setAllUsers(data);
-        setDisplayed(data);
-      }
-    } catch {
-      toast.error('Erreur de chargement');
-    }
-    setSearch('');
-  }
+  useEffect(() => {
+    const base = tab === 'pending' ? pending : allUsers;
+    const filtered = Array.isArray(base)
+      ? base.filter(u =>
+          (u.name || u.username).toLowerCase().includes(search.toLowerCase()) ||
+          u.username.toLowerCase().includes(search.toLowerCase()) ||
+          (u.phone || '').includes(search)
+        )
+      : [];
+    setDisplayed(filtered);
+  }, [search, pending, allUsers, tab]);
 
   const handleValidate = async id => {
     await validateUser(id);
@@ -106,7 +133,6 @@ export default function Users() {
         ))}
       </div>
 
-      {/* Barre de recherche toujours visible */}
       <div className="search-bar users-search">
         <FiSearch className="icon" />
         <input
@@ -118,60 +144,41 @@ export default function Users() {
       </div>
 
       <div className="cards-container">
-        {displayed.map(u => (
-          <div
-            key={u.id}
-            className={`user-card ${tab === 'pending' ? 'pending' : ''}`}
-          >
-            <div className="user-info">
-              <div className="avatar">
-                {(u.name || u.username)[0].toUpperCase()}
+        {displayed.length > 0 ? (
+          displayed.map(u => (
+            <div
+              key={u.id}
+              className={`user-card ${tab === 'pending' ? 'pending' : ''}`}
+            >
+              <div className="user-info">
+                <div className="avatar">
+                  {(u.name || u.username)[0]?.toUpperCase()}
+                </div>
+                <div>
+                  <h3>{u.name || u.username}</h3>
+                  <p className="small">@{u.username}</p>
+                  <p className="small">{u.phone}</p>
+                </div>
               </div>
-              <div>
-                <h3>{u.name || u.username}</h3>
-                <p className="small">@{u.username}</p>
-                <p className="small">{u.phone}</p>
+              <div className="actions">
+                {tab === 'pending' ? (
+                  <>
+                    <FiCheckCircle className="icon accept" title="Valider" onClick={() => handleValidate(u.id)} />
+                    <FiXCircle className="icon reject" title="Rejeter" onClick={() => handleReject(u.id)} />
+                  </>
+                ) : (
+                  <>
+                    <FiEdit2 className="icon edit" title="Modifier" onClick={() => openEdit(u)} />
+                    <FiRefreshCw className="icon refresh" title="Mot de passe temporaire" onClick={() => toast.info('Mot de passe temporaire généré')} />
+                    {!u.is_admin && (
+                      <FiXCircle className="icon delete" title="Supprimer" onClick={() => handleDelete(u.id)} />
+                    )}
+                  </>
+                )}
               </div>
             </div>
-            <div className="actions">
-              {tab === 'pending' ? (
-                <>
-                  <FiCheckCircle
-                    className="icon accept"
-                    title="Valider"
-                    onClick={() => handleValidate(u.id)}
-                  />
-                  <FiXCircle
-                    className="icon reject"
-                    title="Rejeter"
-                    onClick={() => handleReject(u.id)}
-                  />
-                </>
-              ) : (
-                <>
-                  <FiEdit2
-                    className="icon edit"
-                    title="Modifier"
-                    onClick={() => openEdit(u)}
-                  />
-                  <FiRefreshCw
-                    className="icon refresh"
-                    title="Mot de passe temporaire"
-                    onClick={() => toast.info('Mot de passe temporaire généré')}
-                  />
-                  {!u.is_admin && (
-                    <FiXCircle
-                      className="icon delete"
-                      title="Supprimer"
-                      onClick={() => handleDelete(u.id)}
-                    />
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-        ))}
-        {displayed.length === 0 && (
+          ))
+        ) : (
           <p className="no-users">
             {tab === 'pending' ? 'Aucun en attente' : 'Aucun utilisateur trouvé'}
           </p>
@@ -212,11 +219,10 @@ export default function Users() {
                   onChange={e => handleModalChange('password', e.target.value)}
                   placeholder="Nouveau mot de passe"
                 />
-                {modal.showPass ? (
-                  <FiEyeOff onClick={() => setModal(m => ({ ...m, showPass: false }))} />
-                ) : (
-                  <FiEye onClick={() => setModal(m => ({ ...m, showPass: true }))} />
-                )}
+                {modal.showPass
+                  ? <FiEyeOff onClick={() => setModal(m => ({ ...m, showPass: false }))} />
+                  : <FiEye onClick={() => setModal(m => ({ ...m, showPass: true }))} />
+                }
               </div>
             </label>
             <div className="modal-actions">
@@ -231,5 +237,5 @@ export default function Users() {
         </div>
       )}
     </div>
-);
+  );
 }
